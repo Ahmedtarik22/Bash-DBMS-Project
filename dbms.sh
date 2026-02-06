@@ -12,9 +12,9 @@ do
         exit 0
     fi
     case "$choice" in 
-        "Create DB") zenity --info --text="creating db"
+        "Create DB") create_database
         ;;
-        "List DB") zenity --info --text="list db"
+        "List DB") list_databases
         ;;
         "Drop DB") zenity --info --text="drop db"
         ;;

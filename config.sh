@@ -2,7 +2,7 @@
 DB_ROOT="./databases"
 ACTIVE_TABLE=".table"
 SEP=":"
-
+CURRENT_DB=""
 init_db(){
 	if [[ -d "$DB_ROOT" ]]
 	then

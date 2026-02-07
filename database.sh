@@ -58,9 +58,8 @@ select_database() {
 
     selected=$(get_database_list | zenity --list --title="Select Database to $operation" --text="Choose a database to $operation:" --column="Database Name" --height=400)
 
-    if [[ $? -ne 0 ]]
-    then
-        exit 0
+    if [[ -z "$selected" ]]; then
+        return 1
     fi
 
     echo "$selected"
@@ -68,7 +67,9 @@ select_database() {
 }
 
 drop_database() {
-    db_name=$(select_database "drop")
+    db_name=$(select_database "drop") || {
+        return
+    }
 
     db_path="$DB_ROOT/$db_name"
     if [[ ! -d "$db_path" ]]; then
@@ -88,4 +89,19 @@ drop_database() {
     else
         zenity --info --title="Cancelled" --text="Deletion cancelled"
     fi
+}
+
+connect_database() {
+    db_name=$(select_database "connect") || {
+        return
+    }
+    db_path="$DB_ROOT/$db_name"
+    if [[ ! -d "$db_path" ]]; then
+        zenity --error --title="Not Found" --text="Database '$db_name' does not exist"
+        return
+    fi
+
+    CURRENT_DB="$db_name"
+    zenity --info --title="Connected" --text="Connected to database '$CURRENT_DB'."
+    table_menu
 }

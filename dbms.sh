@@ -6,7 +6,7 @@ source ./validation.sh
 init_db
 while true
 do
-    choice=$(zenity --list --title="BASH DBMS" --text="Choose an option" --column="Database List" "Create DB" "Connect To DB" "List DBs" "Drop DB" "Exit" --height=400 --width=400)
+    choice=$(zenity --list --title="BASH DBMS" --text="Choose an option" --column="Database List" "Create DB" "Connect To DB" "List DBs" "Drop DB" "Exit" --height=400)
     if [[ $? -ne 0 ]]
     then
         exit 0
@@ -14,7 +14,7 @@ do
     case "$choice" in 
         "Create DB") create_database
         ;;
-        "Connect To DB") exit 0
+        "Connect To DB") connect_database
         ;;
         "List DBs") list_databases
         ;;

@@ -33,28 +33,22 @@ ensure_db_connected() {
     return 0
 }
 
-
 list_tables() {
     ensure_db_connected || return 1
 
-    shopt -s nullglob
-    tables=("$CURRENT_DB"/*"$ACTIVE_TABLE")
-    shopt -u nullglob
+    tables=$(ls "$CURRENT_DB" 2>/dev/null | grep ".table$")
 
-    if [[ ${#tables[@]} -eq 0 ]]
+    if [[ -z "$tables" ]]
     then
-        zenity --error \
-            --title="No Tables" \
-            --text="No tables found in this database"
+        zenity --error --text="No tables found in this database"
         return 1
     fi
 
-    printf "%s\n" "${tables[@]##*/}" | zenity --list \
+    echo "$tables" | zenity --list \
         --title="Tables List" \
         --text="Available Tables" \
         --column="Table Name"
 }
-
 
 create_table() {
     ensure_db_connected || return 1
@@ -72,9 +66,7 @@ create_table() {
             continue
         }
 
-        table_path="$CURRENT_DB/$table_name$ACTIVE_TABLE"
-
-        if [[ -f "$table_path" ]]
+        if [[ -f "$CURRENT_DB/$table_name.table" ]]
         then
             zenity --error --text="Table already exists"
             continue
@@ -87,26 +79,21 @@ create_table() {
     done
 }
 
-
 drop_table() {
     ensure_db_connected || return 1
 
-    shopt -s nullglob
-    tables=("$CURRENT_DB"/*"$ACTIVE_TABLE")
-    shopt -u nullglob
+    tables=$(ls "$CURRENT_DB" 2>/dev/null | grep ".table$")
 
-    if [[ ${#tables[@]} -eq 0 ]]
+    if [[ -z "$tables" ]]
     then
-        zenity --error \
-            --title="No Tables" \
-            --text="There are no tables to delete in this database"
+        zenity --error --text="There are no tables to delete"
         return 1
     fi
 
-    table=$(printf "%s\n" "${tables[@]##*/}" | zenity --list \
+    table=$(echo "$tables" | zenity --list \
         --title="Drop Table" \
         --text="Select table to drop" \
-        --column="Table")
+        --column="Table Name")
 
     [[ $? -ne 0 || -z "$table" ]] && return 0
 
@@ -119,4 +106,3 @@ drop_table() {
 
     zenity --info --text="Table deleted successfully"
 }
-

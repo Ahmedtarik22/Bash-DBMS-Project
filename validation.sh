@@ -1,4 +1,12 @@
 #!/bin/bash
+
+RESERVED=(
+        select insert update delete
+        create drop use show
+        table database where from
+        join group order
+)
+
 validate_name() {
         local name="$1"
         if [[ -z "$name" ]]; then
@@ -14,6 +22,13 @@ validate_name() {
                 zenity --error --text="Wrong name. It must start with a letter and contain only letters, numbers, underscores"
                 return 1
         fi
+
+        for word in "${RESERVED[@]}"; do
+                if [[ "${name,,}" == "$word" ]]; then
+                        zenity --error --text="$name is reserved"
+                        return 1
+                fi
+        done
 
         return 0
 }

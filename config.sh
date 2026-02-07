@@ -3,8 +3,6 @@ DB_ROOT="./databases"
 ACTIVE_TABLE=".table"
 SEP=":"
 
-CURRENT_DB=""
-
 init_db(){
 	if [[ -d "$DB_ROOT" ]]
 	then
@@ -13,8 +11,7 @@ init_db(){
 	if [[ ! -e "$DB_ROOT" ]]
 	then
 		mkdir -p "$DB_ROOT" || {
-			zenity --error --title="Error" \
-				--text="Failed to create database directory $DB_ROOT Check permissions"
+			zenity --error --title="Error" --text="Failed to create database directory $DB_ROOT Check permissions"
 			exit 1
 		}
 		return 0
@@ -63,7 +60,7 @@ init_db(){
 				return 0
 				;;
 			*)
-				zenity --error --title="Error" --text="Invalid choice" --width=250
+				zenity --error --title="Error" --text="Invalid choice"
 				;;
 		esac
 	done

@@ -101,7 +101,9 @@ connect_database() {
         return
     fi
 
-    CURRENT_DB="$db_name"
+    # CURRENT_DB="$db_name"
+    CURRENT_DB="$DB_ROOT/$db_name"
+
     zenity --info --title="Connected" --text="Connected to database '$CURRENT_DB'."
     table_menu
 }

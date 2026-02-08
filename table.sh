@@ -9,6 +9,7 @@ table_menu() {
             --column="Options" \
             "List Tables" \
             "Create Table" \
+            "Insert Into Table" \
             "Drop Table" \
             "Back")
 
@@ -17,6 +18,7 @@ table_menu() {
         case "$choice" in
             "List Tables") list_tables ;;
             "Create Table") create_table ;;
+            "Insert Into Table") insert_into_table ;;
             "Drop Table") drop_table ;;
             "Back") return 0 ;;
             *) zenity --error --text="Invalid choice" ;;
@@ -132,6 +134,76 @@ define_columns() {
     touch "$CURRENT_DB/$table_name.table"
 
     zenity --info --text="Table '$table_name' created successfully"
+}
+
+insert_into_table() {
+    ensure_db_connected || return 1
+
+    tables=$(ls "$CURRENT_DB" 2>/dev/null | grep ".table$")
+    if [[ -z "$tables" ]]
+    then
+        zenity --error --text="No tables found"
+        return 1
+    fi
+
+    table=$(echo "$tables" | zenity --list \
+        --title="Insert Into Table" \
+        --text="Select table" \
+        --column="Table Name")
+
+    [[ $? -ne 0 || -z "$table" ]] && return 0
+
+    meta="$CURRENT_DB/${table%.table}.meta"
+    data="$CURRENT_DB/$table"
+
+    columns=$(sed -n '1p' "$meta")
+    types=$(sed -n '2p' "$meta")
+    pk=$(sed -n '3p' "$meta")
+
+    values=""
+
+    IFS=":" read -ra col_arr <<< "$columns"
+    IFS=":" read -ra type_arr <<< "$types"
+
+    for i in "${!col_arr[@]}"
+    do
+        col="${col_arr[$i]}"
+        type="${type_arr[$i]}"
+
+        val=$(zenity --entry \
+            --title="Insert Value" \
+            --text="Enter value for $col ($type):")
+
+        [[ $? -ne 0 ]] && return 0
+
+        if [[ "$type" == "int" ]] && ! [[ "$val" =~ ^[0-9]+$ ]]
+        then
+            zenity --error --text="$col must be an integer"
+            return 1
+        fi
+
+        if [[ "$type" == "string" ]] && [[ "$val" == *:* ]]
+        then
+            zenity --error --text="String cannot contain ':'"
+            return 1
+        fi
+
+        if [[ "$col" == "$pk" ]]
+        then
+            if grep -q "^$val:" "$data" || grep -q ":$val:" "$data" || grep -q ":$val$" "$data"
+            then
+                zenity --error --text="Primary key value already exists"
+                return 1
+            fi
+        fi
+
+        values="$values$val:"
+    done
+
+    values="${values%:}"
+    echo "$values" >> "$data"
+
+    zenity --info --text="Row inserted successfully"
 }
 
 drop_table() {

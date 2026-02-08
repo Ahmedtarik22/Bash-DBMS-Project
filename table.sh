@@ -46,37 +46,92 @@ list_tables() {
 
     echo "$tables" | zenity --list \
         --title="Tables List" \
-        --text="Available Tables" \
         --column="Table Name"
 }
 
 create_table() {
     ensure_db_connected || return 1
 
-    while true
+    table_name=$(zenity --entry \
+        --title="Create Table" \
+        --text="Enter table name:")
+
+    [[ $? -ne 0 ]] && return 0
+
+    validate_name "$table_name" || {
+        zenity --error --text="Invalid table name"
+        return 1
+    }
+
+    if [[ -f "$CURRENT_DB/$table_name.table" ]]
+    then
+        zenity --error --text="Table already exists"
+        return 1
+    fi
+
+    define_columns "$table_name"
+}
+
+define_columns() {
+    table_name="$1"
+
+    col_count=$(zenity --entry \
+        --title="Columns Count" \
+        --text="Enter number of columns:")
+
+    [[ $? -ne 0 ]] && return 1
+
+    if ! [[ "$col_count" =~ ^[0-9]+$ ]] || [[ "$col_count" -le 0 ]]
+    then
+        zenity --error --text="Invalid number of columns"
+        return 1
+    fi
+
+    columns=""
+    types=""
+
+    for (( i=1; i<=col_count; i++ ))
     do
-        table_name=$(zenity --entry \
-            --title="Create Table" \
-            --text="Enter table name:")
+        col_name=$(zenity --entry \
+            --title="Column Name" \
+            --text="Enter name of column $i:")
 
-        [[ $? -ne 0 ]] && return 0
+        validate_name "$col_name" || return 1
 
-        validate_name "$table_name" || {
-            zenity --error --text="Invalid table name"
-            continue
-        }
-
-        if [[ -f "$CURRENT_DB/$table_name.table" ]]
+        if echo "$columns" | grep -w "$col_name" >/dev/null
         then
-            zenity --error --text="Table already exists"
-            continue
+            zenity --error --text="Duplicate column name"
+            return 1
         fi
 
-        zenity --info \
-            --title="Next Step" \
-            --text="Table name accepted\nNext: define columns"
-        break
+        col_type=$(zenity --list \
+            --title="Column Type" \
+            --column="Type" \
+            "int" "string")
+
+        [[ $? -ne 0 ]] && return 1
+
+        columns="$columns$col_name:"
+        types="$types$col_type:"
     done
+
+    columns="${columns%:}"
+    types="${types%:}"
+
+    pk=$(echo "$columns" | tr ":" "\n" | zenity --list \
+        --title="Primary Key" \
+        --text="Choose Primary Key" \
+        --column="Column")
+
+    [[ $? -ne 0 || -z "$pk" ]] && return 1
+
+    echo "$columns" > "$CURRENT_DB/$table_name.meta"
+    echo "$types" >> "$CURRENT_DB/$table_name.meta"
+    echo "$pk" >> "$CURRENT_DB/$table_name.meta"
+
+    touch "$CURRENT_DB/$table_name.table"
+
+    zenity --info --text="Table '$table_name' created successfully"
 }
 
 drop_table() {
@@ -97,12 +152,12 @@ drop_table() {
 
     [[ $? -ne 0 || -z "$table" ]] && return 0
 
-    zenity --question \
-        --text="Are you sure you want to delete table '$table'?"
+    zenity --question --text="Are you sure you want to delete table '$table'?"
 
     [[ $? -ne 0 ]] && return 0
 
     rm -f "$CURRENT_DB/$table"
+    rm -f "$CURRENT_DB/${table%.table}.meta"
 
     zenity --info --text="Table deleted successfully"
 }

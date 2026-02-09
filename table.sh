@@ -11,6 +11,7 @@ table_menu() {
             "Create Table" \
             "Insert Into Table" \
             "Drop Table" \
+            "Select From Table" \
             "Back")
 
         [[ $? -ne 0 ]] && return 0
@@ -20,6 +21,7 @@ table_menu() {
             "Create Table") create_table ;;
             "Insert Into Table") insert_into_table ;;
             "Drop Table") drop_table ;;
+            "Select From Table") select_from_table ;;
             "Back") return 0 ;;
             *) zenity --error --text="Invalid choice" ;;
         esac
@@ -245,4 +247,62 @@ drop_table() {
     rm -f "$CURRENT_DB/$table.meta"
 
     zenity --info --text="Table deleted successfully"
+}
+
+
+select_from_table() {
+    ensure_db_connected || return 1
+
+    tables=$(ls "$CURRENT_DB" 2>/dev/null | grep ".table$" | sed 's/\.table$//')
+    [[ -z "$tables" ]] && {
+        zenity --error --text="No tables found"
+        return 1
+    }
+
+    table=$(zenity --list \
+        --title="Select Table" \
+        --column="Table Name" \
+        $(echo "$tables"))
+
+    [[ $? -ne 0 || -z "$table" ]] && return 0
+
+    option=$(zenity --list \
+        --title="Select Display Mode" \
+        --column="Option" \
+        "Display all rows" \
+        "Display one row by Primary Key" \
+        "Back")
+
+    [[ $? -ne 0 || "$option" == "Back" ]] && return 0
+
+    if [[ "$option" == "Display all rows" ]]
+    then
+        select_all_rows "$table"
+    else
+        select_one_row_by_pk "$table"
+    fi
+}
+
+select_all_rows() {
+    table="$1"
+
+    meta="$CURRENT_DB/$table.meta"
+    data="$CURRENT_DB/$table.table"
+
+    columns=$(sed -n '1p' "$meta")
+
+    if [[ ! -s "$data" ]]
+    then
+        zenity --info --text="Table is empty"
+        return 0
+    fi
+
+    {
+        echo "$columns"
+        echo "--------------------"
+        cat "$data"
+    } | sed 's/:/ | /g' | zenity --text-info \
+        --title="Table Data" \
+        --width=600 \
+        --height=400
 }

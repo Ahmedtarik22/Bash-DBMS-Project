@@ -38,7 +38,7 @@ ensure_db_connected() {
 list_tables() {
     ensure_db_connected || return 1
 
-    tables=$(ls "$CURRENT_DB" 2>/dev/null | grep ".table$")
+    tables=$(ls "$CURRENT_DB" 2>/dev/null | grep ".table$" | sed 's/\.table$//')
 
     if [[ -z "$tables" ]]
     then
@@ -46,30 +46,33 @@ list_tables() {
         return 1
     fi
 
-    echo "$tables" | zenity --list \
+    zenity --list \
         --title="Tables List" \
-        --column="Table Name"
+        --column="Table Name" \
+        $(echo "$tables")
 }
 
 create_table() {
     ensure_db_connected || return 1
 
-    table_name=$(zenity --entry \
-        --title="Create Table" \
-        --text="Enter table name:")
+    while true
+    do
+        table_name=$(zenity --entry \
+            --title="Create Table" \
+            --text="Enter table name:")
 
-    [[ $? -ne 0 ]] && return 0
+        [[ $? -ne 0 ]] && return 0
 
-    validate_name "$table_name" || {
-        zenity --error --text="Invalid table name"
-        return 1
-    }
+        validate_name "$table_name" || continue
 
-    if [[ -f "$CURRENT_DB/$table_name.table" ]]
-    then
-        zenity --error --text="Table already exists"
-        return 1
-    fi
+        if [[ -f "$CURRENT_DB/$table_name.table" ]]
+        then
+            zenity --error --text="Table already exists"
+            continue
+        fi
+
+        break
+    done
 
     define_columns "$table_name"
 }
@@ -77,34 +80,45 @@ create_table() {
 define_columns() {
     table_name="$1"
 
-    col_count=$(zenity --entry \
-        --title="Columns Count" \
-        --text="Enter number of columns:")
+    while true
+    do
+        col_count=$(zenity --entry \
+            --title="Columns Count" \
+            --text="Enter number of columns:")
 
-    [[ $? -ne 0 ]] && return 1
+        [[ $? -ne 0 ]] && return 1
 
-    if ! [[ "$col_count" =~ ^[0-9]+$ ]] || [[ "$col_count" -le 0 ]]
-    then
+        if [[ "$col_count" =~ ^[0-9]+$ ]] && [[ "$col_count" -gt 0 ]]
+        then
+            break
+        fi
+
         zenity --error --text="Invalid number of columns"
-        return 1
-    fi
+    done
 
     columns=""
     types=""
 
     for (( i=1; i<=col_count; i++ ))
     do
-        col_name=$(zenity --entry \
-            --title="Column Name" \
-            --text="Enter name of column $i:")
+        while true
+        do
+            col_name=$(zenity --entry \
+                --title="Column Name" \
+                --text="Enter name of column $i:")
 
-        validate_name "$col_name" || return 1
+            [[ $? -ne 0 ]] && return 1
 
-        if echo "$columns" | grep -w "$col_name" >/dev/null
-        then
-            zenity --error --text="Duplicate column name"
-            return 1
-        fi
+            validate_name "$col_name" || continue
+
+            if echo "$columns" | grep -w "$col_name" >/dev/null
+            then
+                zenity --error --text="Duplicate column name"
+                continue
+            fi
+
+            break
+        done
 
         col_type=$(zenity --list \
             --title="Column Type" \
@@ -122,7 +136,6 @@ define_columns() {
 
     pk=$(echo "$columns" | tr ":" "\n" | zenity --list \
         --title="Primary Key" \
-        --text="Choose Primary Key" \
         --column="Column")
 
     [[ $? -ne 0 || -z "$pk" ]] && return 1
@@ -139,63 +152,65 @@ define_columns() {
 insert_into_table() {
     ensure_db_connected || return 1
 
-    tables=$(ls "$CURRENT_DB" 2>/dev/null | grep ".table$")
-    if [[ -z "$tables" ]]
-    then
+    tables=$(ls "$CURRENT_DB" 2>/dev/null | grep ".table$" | sed 's/\.table$//')
+    [[ -z "$tables" ]] && {
         zenity --error --text="No tables found"
         return 1
-    fi
+    }
 
-    table=$(echo "$tables" | zenity --list \
+    table=$(zenity --list \
         --title="Insert Into Table" \
-        --text="Select table" \
-        --column="Table Name")
+        --column="Table Name" \
+        $(echo "$tables"))
 
     [[ $? -ne 0 || -z "$table" ]] && return 0
 
-    meta="$CURRENT_DB/${table%.table}.meta"
-    data="$CURRENT_DB/$table"
+    meta="$CURRENT_DB/$table.meta"
+    data="$CURRENT_DB/$table.table"
 
     columns=$(sed -n '1p' "$meta")
     types=$(sed -n '2p' "$meta")
     pk=$(sed -n '3p' "$meta")
 
+    col_count=$(echo "$columns" | tr ":" "\n" | wc -l)
     values=""
 
-    IFS=":" read -ra col_arr <<< "$columns"
-    IFS=":" read -ra type_arr <<< "$types"
-
-    for i in "${!col_arr[@]}"
+    for (( i=1; i<=col_count; i++ ))
     do
-        col="${col_arr[$i]}"
-        type="${type_arr[$i]}"
+        col=$(echo "$columns" | cut -d":" -f$i)
+        type=$(echo "$types" | cut -d":" -f$i)
 
-        val=$(zenity --entry \
-            --title="Insert Value" \
-            --text="Enter value for $col ($type):")
+        while true
+        do
+            val=$(zenity --entry \
+                --title="Insert Value" \
+                --text="Enter value for $col ($type):")
 
-        [[ $? -ne 0 ]] && return 0
+            [[ $? -ne 0 ]] && return 0
 
-        if [[ "$type" == "int" ]] && ! [[ "$val" =~ ^[0-9]+$ ]]
-        then
-            zenity --error --text="$col must be an integer"
-            return 1
-        fi
-
-        if [[ "$type" == "string" ]] && [[ "$val" == *:* ]]
-        then
-            zenity --error --text="String cannot contain ':'"
-            return 1
-        fi
-
-        if [[ "$col" == "$pk" ]]
-        then
-            if grep -q "^$val:" "$data" || grep -q ":$val:" "$data" || grep -q ":$val$" "$data"
+            if [[ "$type" == "int" ]] && ! [[ "$val" =~ ^[0-9]+$ ]]
             then
-                zenity --error --text="Primary key value already exists"
-                return 1
+                zenity --error --text="$col must be an integer"
+                continue
             fi
-        fi
+
+            if [[ "$type" == "string" ]] && [[ "$val" == *:* ]]
+            then
+                zenity --error --text="String cannot contain ':'"
+                continue
+            fi
+
+            if [[ "$col" == "$pk" ]]
+            then
+                if grep -q "^$val:" "$data" || grep -q ":$val:" "$data" || grep -q ":$val$" "$data"
+                then
+                    zenity --error --text="Primary key value already exists"
+                    continue
+                fi
+            fi
+
+            break
+        done
 
         values="$values$val:"
     done
@@ -209,18 +224,16 @@ insert_into_table() {
 drop_table() {
     ensure_db_connected || return 1
 
-    tables=$(ls "$CURRENT_DB" 2>/dev/null | grep ".table$")
-
-    if [[ -z "$tables" ]]
-    then
+    tables=$(ls "$CURRENT_DB" 2>/dev/null | grep ".table$" | sed 's/\.table$//')
+    [[ -z "$tables" ]] && {
         zenity --error --text="There are no tables to delete"
         return 1
-    fi
+    }
 
-    table=$(echo "$tables" | zenity --list \
+    table=$(zenity --list \
         --title="Drop Table" \
-        --text="Select table to drop" \
-        --column="Table Name")
+        --column="Table Name" \
+        $(echo "$tables"))
 
     [[ $? -ne 0 || -z "$table" ]] && return 0
 
@@ -228,8 +241,8 @@ drop_table() {
 
     [[ $? -ne 0 ]] && return 0
 
-    rm -f "$CURRENT_DB/$table"
-    rm -f "$CURRENT_DB/${table%.table}.meta"
+    rm -f "$CURRENT_DB/$table.table"
+    rm -f "$CURRENT_DB/$table.meta"
 
     zenity --info --text="Table deleted successfully"
 }

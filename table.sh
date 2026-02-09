@@ -12,6 +12,7 @@ table_menu() {
             "Insert Into Table" \
             "Drop Table" \
             "Select From Table" \
+            "Delete From Table" \
             "Back")
 
         [[ $? -ne 0 ]] && return 0
@@ -22,6 +23,7 @@ table_menu() {
             "Insert Into Table") insert_into_table ;;
             "Drop Table") drop_table ;;
             "Select From Table") select_from_table ;;
+            "Delete From Table") delete_from_table ;;
             "Back") return 0 ;;
             *) zenity --error --text="Invalid choice" ;;
         esac
@@ -345,4 +347,56 @@ select_one_row_by_pk() {
         --title="Result" \
         --width=600 \
         --height=200
+}
+
+delete_from_table() {
+    ensure_db_connected || return 1
+
+    tables=$(ls "$CURRENT_DB" 2>/dev/null | grep ".table$" | sed 's/\.table$//')
+    [[ -z "$tables" ]] && {
+        zenity --error --text="No tables found"
+        return 1
+    }
+
+    table=$(zenity --list \
+        --title="Delete From Table" \
+        --text="Select table" \
+        --column="Table Name" \
+        $(echo "$tables"))
+
+    [[ $? -ne 0 || -z "$table" ]] && return 0
+
+    meta="$CURRENT_DB/$table.meta"
+    data="$CURRENT_DB/$table.table"
+
+    columns=$(sed -n '1p' "$meta")
+    pk=$(sed -n '3p' "$meta")
+
+    pk_index=$(echo "$columns" | tr ":" "\n" | grep -n "^$pk$" | cut -d: -f1)
+
+    pk_values=$(cut -d":" -f"$pk_index" "$data")
+
+    if [[ -z "$pk_values" ]]
+    then
+        zenity --info --text="Table is empty"
+        return 0
+    fi
+
+    selected_pk=$(zenity --list \
+        --title="Delete Row" \
+        --text="Select primary key to delete" \
+        --column="$pk" \
+        $(echo "$pk_values"))
+
+    [[ $? -ne 0 || -z "$selected_pk" ]] && return 0
+
+    zenity --question \
+        --text="Are you sure you want to delete this record?"
+
+    [[ $? -ne 0 ]] && return 0
+
+    grep -v "^$selected_pk:" "$data" | grep -v ":$selected_pk:" > "$data.tmp"
+    mv "$data.tmp" "$data"
+
+    zenity --info --text="Row deleted successfully"
 }

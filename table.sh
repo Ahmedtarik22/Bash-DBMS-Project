@@ -306,3 +306,43 @@ select_all_rows() {
         --width=600 \
         --height=400
 }
+
+
+select_one_row_by_pk() {
+    table="$1"
+
+    meta="$CURRENT_DB/$table.meta"
+    data="$CURRENT_DB/$table.table"
+
+    columns=$(sed -n '1p' "$meta")
+    pk=$(sed -n '3p' "$meta")
+
+    pk_index=$(echo "$columns" | tr ":" "\n" | grep -n "^$pk$" | cut -d: -f1)
+
+    pk_values=$(cut -d":" -f"$pk_index" "$data")
+
+    if [[ -z "$pk_values" ]]
+    then
+        zenity --info --text="Table is empty"
+        return 0
+    fi
+
+    selected_pk=$(zenity --list \
+        --title="Select Primary Key" \
+        --text="Choose a primary key value" \
+        --column="$pk" \
+        $(echo "$pk_values"))
+
+    [[ $? -ne 0 || -z "$selected_pk" ]] && return 0
+
+    row=$(awk -F: -v idx="$pk_index" -v val="$selected_pk" '$idx==val {print}' "$data")
+
+    {
+        echo "$columns"
+        echo "--------------------"
+        echo "$row"
+    } | sed 's/:/ | /g' | zenity --text-info \
+        --title="Result" \
+        --width=600 \
+        --height=200
+}

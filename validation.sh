@@ -4,7 +4,7 @@ RESERVED=(
         select insert update delete
         create drop use show
         table database where from
-        join group order
+        join group order exit
 )
 
 validate_name() {

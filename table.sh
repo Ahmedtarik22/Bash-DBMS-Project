@@ -3,13 +3,13 @@
 table_menu() {
     while true
     do
-        choice=$(zenity --list \
+        choice=$(zenity --list --height=600 \
             --title="Tables Menu" \
             --text="Choose table operation" \
             --column="Options" \
             "List Tables" \
             "Create Table" \
-            "Insert Into Table" \
+            "Insert Into Table" "Update Table"\
             "Drop Table" \
             "Select From Table" \
             "Delete From Table" \
@@ -21,6 +21,7 @@ table_menu() {
             "List Tables") list_tables ;;
             "Create Table") create_table ;;
             "Insert Into Table") insert_into_table ;;
+            "Update Table") update_table ;;
             "Drop Table") drop_table ;;
             "Select From Table") select_from_table ;;
             "Delete From Table") delete_from_table ;;
@@ -303,12 +304,11 @@ select_all_rows() {
         echo "$columns"
         echo "--------------------"
         cat "$data"
-    } | sed 's/:/ | /g' | zenity --text-info \
+    } | zenity --text-info \
         --title="Table Data" \
         --width=600 \
         --height=400
 }
-
 
 select_one_row_by_pk() {
     table="$1"
@@ -343,10 +343,10 @@ select_one_row_by_pk() {
         echo "$columns"
         echo "--------------------"
         echo "$row"
-    } | sed 's/:/ | /g' | zenity --text-info \
+    } | zenity --text-info \
         --title="Result" \
         --width=600 \
-        --height=200
+        --height=400
 }
 
 delete_from_table() {
@@ -399,4 +399,146 @@ delete_from_table() {
     mv "$data.tmp" "$data"
 
     zenity --info --text="Row deleted successfully"
+}
+
+update_table() {
+    ensure_db_connected || return 1
+
+    tables=$(find "$CURRENT_DB" -maxdepth 1 -name "*.table" -printf "%f\n" | sed 's/\.table$//')
+    [[ -z "$tables" ]] && {
+        zenity --error --text="No tables found"
+        return 1
+    }
+
+    table=$( echo "$tables" | zenity --list --title="Update Table" --column="Table Name")
+
+    [[ $? -ne 0 || -z "$table" ]] && return 0
+
+    meta="$CURRENT_DB/$table.meta"
+    data="$CURRENT_DB/$table.table"
+
+    if [[ ! -s "$data" ]]; then
+        zenity --error --text="Table is empty. Nothing to update."
+        return 1
+    fi
+
+    columns=$(sed -n '1p' "$meta")
+    types=$(sed -n '2p' "$meta")
+    pk=$(sed -n '3p' "$meta")
+
+    pk_index=$(echo "$columns" | tr ":" "\n" | grep -n "^$pk$" | cut -d":" -f1)
+
+    pk_value=$(zenity --entry --title="Select Row" --text="Enter $pk (Primary Key) value of row to update:")
+
+    [[ $? -ne 0 || -z "$pk_value" ]] && return 0
+
+    row_number=$(awk -F: -v val="$pk_value" -v idx="$pk_index" ' $idx==val {print NR; exit}' "$data")
+
+    if [[ -z "$row_number" ]]; then
+        zenity --error --text="No row found with $pk = '$pk_value'"
+        return 1
+    fi
+
+    current_row=$(sed -n "${row_number}p" "$data")
+
+    update_type=$(zenity --list --title="Update Type" --text="How do you want to update?" --column="Option" "Update Entire Row" "Update Specific Columns")
+
+    [[ $? -ne 0 || -z "$update_type" ]] && return 0
+
+    col_count=$(echo "$columns" | tr ":" "\n" | wc -l)
+
+    if [[ "$update_type" == "Update Entire Row" ]]; then
+        new_values=""
+
+        for (( i=1; i<=col_count; i++ )); do
+            col=$(echo "$columns" | cut -d":" -f$i)
+            type=$(echo "$types" | cut -d":" -f$i)
+            current_val=$(echo "$current_row" | cut -d":" -f$i)
+
+            while true; do
+                val=$(zenity --entry --title="Update Value" --text="Enter new value for $col ($type):\nCurrent: $current_val" --entry-text="$current_val")
+
+                [[ $? -ne 0 ]] && return 0
+
+                if [[ "$type" == "int" ]] && ! [[ "$val" =~ ^[0-9]+$ ]]; then
+                    zenity --error --text="$col must be an integer"
+                    continue
+                fi
+
+                if [[ "$type" == "string" ]] && [[ "$val" == *:* ]]; then
+                    zenity --error --text="String cannot contain ':'"
+                    continue
+                fi
+
+                if [[ "$col" == "$pk" ]]; then
+                    if [[ "$val" != "$pk_value" ]]; then
+                        exists=$(awk -F: -v idx="$i" -v val="$val" -v row="$row_number" '$idx==val && NR!=row {print 1}' "$data")
+                        if [[ -n "$exists" ]]; then
+                            zenity --error --text="Primary key value already exists"
+                            continue
+                        fi
+                    fi
+                fi
+
+                break
+            done
+
+            new_values="$new_values$val:"
+        done
+
+        new_values="${new_values%:}"
+        awk -v row="$row_number" -v new="$new_values" 'NR == row { print new; next } { print }' "$data" > "$data.tmp" && mv "$data.tmp" "$data"
+
+        zenity --info --text="Row updated successfully"
+    else
+        selected_cols=$(echo "$columns" | tr ":" "\n" | awk '{print "FALSE\n"$0}' | zenity --list --checklist --title="Select Columns to Update" --text="Choose columns to update:" --column="Select" --column="Column Name" --separator=":")
+
+        [[ $? -ne 0 || -z "$selected_cols" ]] && return 0
+
+        new_values=""
+
+        for (( i=1; i<=col_count; i++ )); do
+            col=$(echo "$columns" | cut -d":" -f$i)
+            type=$(echo "$types" | cut -d":" -f$i)
+            current_val=$(echo "$current_row" | cut -d":" -f$i)
+
+            if echo "$selected_cols" | tr ":" "\n" | grep -q "^$col$"; then
+                while true; do
+                    val=$(zenity --entry --title="Update Value" --text="Enter new value for $col ($type):\nCurrent: $current_val" --entry-text="$current_val")
+
+                    [[ $? -ne 0 ]] && return 0
+
+                    if [[ "$type" == "int" ]] && ! [[ "$val" =~ ^[0-9]+$ ]]; then
+                        zenity --error --text="$col must be an integer"
+                        continue
+                    fi
+
+                    if [[ "$type" == "string" ]] && [[ "$val" == *:* ]]; then
+                        zenity --error --text="String cannot contain ':'"
+                        continue
+                    fi
+
+                    if [[ "$col" == "$pk" ]]; then
+                        if [[ "$val" != "$pk_value" ]]; then
+                            exists=$(awk -F: -v idx="$i" -v val="$val" -v row="$row_number" '$idx==val && NR!=row {print 1}' "$data")
+                            if [[ -n "$exists" ]]; then
+                                zenity --error --text="Primary key value already exists"
+                                continue
+                            fi
+                        fi
+                    fi
+
+                    break
+                done
+                new_values="$new_values$val:"
+            else
+                new_values="$new_values$current_val:"
+            fi
+        done
+
+        new_values="${new_values%:}"
+        awk -v row="$row_number" -v new="$new_values" 'NR == row { print new; next } { print }' "$data" > "$data.tmp" && mv "$data.tmp" "$data"
+
+        zenity --info --text="Columns updated successfully"
+    fi
 }

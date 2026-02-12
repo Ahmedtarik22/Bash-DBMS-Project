@@ -1,6 +1,7 @@
 #!/bin/bash
 DB_ROOT="./databases"
 CURRENT_DB=""
+export CURRENT_DB
 init_db(){
 	if [[ -d "$DB_ROOT" ]]
 	then

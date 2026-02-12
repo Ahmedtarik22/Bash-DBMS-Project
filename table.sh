@@ -231,8 +231,8 @@ insert_into_table() {
 
             if [[ "$col" == "$pk" ]]
             then
-                if grep -q "^$val:" "$data" || grep -q ":$val:" "$data" || grep -q ":$val$" "$data"
-                then
+                pk_index=$(echo "$columns" | tr ":" "\n" | grep -n "^$pk$" | cut -d: -f1)
+                if awk -F: -v idx="$pk_index" -v val="$val" '$idx == val {found=1; exit} END {exit !found}' "$data" 2>/dev/null; then
                     zenity --error --text="Primary key value already exists"
                     continue
                 fi
@@ -432,7 +432,7 @@ delete_from_table() {
 
     [[ $? -ne 0 ]] && return 0
 
-    grep -v "^$selected_pk:" "$data" | grep -v ":$selected_pk:" > "$data.tmp"
+    awk -F: -v idx="$pk_index" -v val="$selected_pk" '$idx != val' "$data" > "$data.tmp"
     mv "$data.tmp" "$data"
 
     zenity --info --text="Row deleted successfully"
@@ -553,14 +553,12 @@ update_table() {
                         [[ $? -ne 0 ]] && return 0
                     fi
 
-                    if [[ "$type" == "int" ]] && ! [[ "$val" =~ ^[0-9]+$ ]]; then
-                        zenity --error --text="$col must be an integer"
-                        continue
+                    if [[ "$type" == "int" ]]; then
+                        validate_int_value "$val" || continue
                     fi
 
-                    if [[ "$type" == "string" ]] && [[ "$val" == *:* ]]; then
-                        zenity --error --text="String cannot contain ':'"
-                        continue
+                    if [[ "$type" == "string" ]]; then
+                        validate_string_value "$val" || continue
                     fi
 
                     if [[ "$col" == "$pk" ]]; then

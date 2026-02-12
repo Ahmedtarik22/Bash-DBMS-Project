@@ -128,7 +128,7 @@ define_columns() {
         col_type=$(zenity --list \
             --title="Column Type" \
             --column="Type" \
-            "int" "string")
+            "int" "string" "boolean")
 
         [[ $? -ne 0 ]] && return 1
 
@@ -139,7 +139,25 @@ define_columns() {
     columns="${columns%:}"
     types="${types%:}"
 
-    pk=$(echo "$columns" | tr ":" "\n" | zenity --list \
+    col_count=$(echo "$columns" | tr ":" "\n" | wc -l)
+    pk_candidates=""
+    
+    for (( i=1; i<=col_count; i++ )); do
+        col=$(echo "$columns" | cut -d":" -f$i)
+        type=$(echo "$types" | cut -d":" -f$i)
+        if [[ "$type" != "boolean" ]]; then
+            pk_candidates="$pk_candidates $col"
+        fi
+    done
+
+    pk_candidates=$(echo "$pk_candidates" | awk '{$1=$1};1')
+
+    if [[ -z "$pk_candidates" ]]; then
+        zenity --error --text="No valid columns for primary key (boolean columns cannot be primary keys)"
+        return 1
+    fi
+
+    pk=$(echo "$pk_candidates" | tr " " "\n" | zenity --list \
         --title="Primary Key" \
         --column="Column")
 
@@ -187,11 +205,20 @@ insert_into_table() {
 
         while true
         do
-            val=$(zenity --entry \
-                --title="Insert Value" \
-                --text="Enter value for $col ($type):")
-
-            [[ $? -ne 0 ]] && return 0
+            if [[ "$type" == "boolean" ]]
+            then
+                val=$(zenity --list \
+                    --title="Insert Value" \
+                    --text="Select value for $col (boolean):" \
+                    --column="Value" \
+                    "true" "false")
+                [[ $? -ne 0 ]] && return 0
+            else
+                val=$(zenity --entry \
+                    --title="Insert Value" \
+                    --text="Enter value for $col ($type):")
+                [[ $? -ne 0 ]] && return 0
+            fi
 
             if [[ "$type" == "int" ]] && ! [[ "$val" =~ ^[0-9]+$ ]]
             then
@@ -456,9 +483,14 @@ update_table() {
             current_val=$(echo "$current_row" | cut -d":" -f$i)
 
             while true; do
-                val=$(zenity --entry --title="Update Value" --text="Enter new value for $col ($type):\nCurrent: $current_val" --entry-text="$current_val")
-
-                [[ $? -ne 0 ]] && return 0
+                if [[ "$type" == "boolean" ]]
+                then
+                    val=$(zenity --list --title="Update Value" --text="Select new value for $col (boolean):\nCurrent: $current_val" --column="Value" "true" "false")
+                    [[ $? -ne 0 ]] && return 0
+                else
+                    val=$(zenity --entry --title="Update Value" --text="Enter new value for $col ($type):\nCurrent: $current_val" --entry-text="$current_val")
+                    [[ $? -ne 0 ]] && return 0
+                fi
 
                 if [[ "$type" == "int" ]] && ! [[ "$val" =~ ^[0-9]+$ ]]; then
                     zenity --error --text="$col must be an integer"
@@ -504,9 +536,14 @@ update_table() {
 
             if echo "$selected_cols" | tr ":" "\n" | grep -q "^$col$"; then
                 while true; do
-                    val=$(zenity --entry --title="Update Value" --text="Enter new value for $col ($type):\nCurrent: $current_val" --entry-text="$current_val")
-
-                    [[ $? -ne 0 ]] && return 0
+                    if [[ "$type" == "boolean" ]]
+                    then
+                        val=$(zenity --list --title="Update Value" --text="Select new value for $col (boolean):\nCurrent: $current_val" --column="Value" "true" "false")
+                        [[ $? -ne 0 ]] && return 0
+                    else
+                        val=$(zenity --entry --title="Update Value" --text="Enter new value for $col ($type):\nCurrent: $current_val" --entry-text="$current_val")
+                        [[ $? -ne 0 ]] && return 0
+                    fi
 
                     if [[ "$type" == "int" ]] && ! [[ "$val" =~ ^[0-9]+$ ]]; then
                         zenity --error --text="$col must be an integer"

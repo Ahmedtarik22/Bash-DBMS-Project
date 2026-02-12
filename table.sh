@@ -327,15 +327,28 @@ select_all_rows() {
         return 0
     fi
 
-    {
-        echo "$columns"
-        echo "--------------------"
-        cat "$data"
-    } | zenity --text-info \
-        --title="Table Data" \
-        --width=600 \
-        --height=400
+    col_count=$(echo "$columns" | tr ":" "\n" | wc -l)
+
+    zenity_cmd="zenity --list --title='Table Data' --text='Displaying all rows' --width=800 --height=400 "
+
+    for (( i=1; i<=col_count; i++ ))
+    do
+        col=$(echo "$columns" | cut -d":" -f$i)
+        zenity_cmd="$zenity_cmd --column='$col'"
+    done
+
+    while read line
+    do
+        for (( i=1; i<=col_count; i++ ))
+        do
+            value=$(echo "$line" | cut -d":" -f$i)
+            zenity_cmd="$zenity_cmd '$value'"
+        done
+    done < "$data"
+
+    eval $zenity_cmd
 }
+
 
 select_one_row_by_pk() {
     table="$1"

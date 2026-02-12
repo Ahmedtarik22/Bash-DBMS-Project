@@ -13,7 +13,7 @@ table_menu() {
             "Drop Table" \
             "Select From Table" \
             "Delete From Table" \
-            "Back")
+            "Disconnect DB")
 
         [[ $? -ne 0 ]] && return 0
 
@@ -25,7 +25,10 @@ table_menu() {
             "Drop Table") drop_table ;;
             "Select From Table") select_from_table ;;
             "Delete From Table") delete_from_table ;;
-            "Back") return 0 ;;
+            "Disconnect DB") 
+                disconnect_database 
+                return 0
+                ;;
             *) zenity --error --text="Invalid choice" ;;
         esac
     done

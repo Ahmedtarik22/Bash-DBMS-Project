@@ -102,7 +102,19 @@ connect_database() {
     fi
 
     CURRENT_DB="$DB_ROOT/$db_name"
+    save_current_db
 
     zenity --info --title="Connected" --text="Connected to database '$db_name'."
     table_menu
+}
+
+disconnect_database() {
+    if [[ -n "$CURRENT_DB" ]]; then
+        db_name=$(basename "$CURRENT_DB")
+        CURRENT_DB=""
+        save_current_db
+        zenity --info --title="Disconnected" --text="Disconnected from database '$db_name'"
+    else
+        zenity --info --title="Not Connected" --text="No database is currently connected"
+    fi
 }

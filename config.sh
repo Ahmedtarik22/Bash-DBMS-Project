@@ -1,7 +1,6 @@
 #!/bin/bash
 DB_ROOT="./databases"
 CURRENT_DB=""
-export CURRENT_DB
 init_db(){
 	if [[ -d "$DB_ROOT" ]]
 	then
@@ -63,4 +62,22 @@ init_db(){
 				;;
 		esac
 	done
+}
+
+save_current_db() {
+	if [[ -n "$CURRENT_DB" ]]; then
+		echo "$CURRENT_DB" > "$DB_ROOT/connectedTo"
+	else
+		rm -f "$DB_ROOT/connectedTo"
+	fi
+}
+
+restore_current_db() {
+	if [[ -f "$DB_ROOT/connectedTo" ]]; then
+		CURRENT_DB=$(cat "$DB_ROOT/connectedTo")
+		if [[ ! -d "$CURRENT_DB" ]]; then
+			CURRENT_DB=""
+			rm -f "$DB_ROOT/connectedTo"
+		fi
+	fi
 }

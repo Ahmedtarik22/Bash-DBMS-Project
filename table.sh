@@ -376,14 +376,23 @@ select_one_row_by_pk() {
 
     row=$(awk -F: -v idx="$pk_index" -v val="$selected_pk" '$idx==val {print}' "$data")
 
-    {
-        echo "$columns"
-        echo "--------------------"
-        echo "$row"
-    } | zenity --text-info \
-        --title="Result" \
-        --width=600 \
-        --height=400
+    col_count=$(echo "$columns" | tr ":" "\n" | wc -l)
+
+    zenity_cmd="zenity --list --title='Selected Row' --text='Row with $pk = $selected_pk' --width=800 --height=400 "
+
+    for (( i=1; i<=col_count; i++ ))
+    do
+        col=$(echo "$columns" | cut -d":" -f$i)
+        zenity_cmd="$zenity_cmd --column='$col'"
+    done
+
+    for (( i=1; i<=col_count; i++ ))
+    do
+        value=$(echo "$row" | cut -d":" -f$i)
+        zenity_cmd="$zenity_cmd '$value'"
+    done
+
+    eval $zenity_cmd
 }
 
 delete_from_table() {

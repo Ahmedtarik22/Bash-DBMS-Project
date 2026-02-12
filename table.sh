@@ -90,7 +90,7 @@ define_columns() {
         col_count=$(zenity --entry \
             --title="Columns Count" \
             --text="Enter number of columns:")
-
+    
         [[ $? -ne 0 ]] && return 1
 
         if [[ "$col_count" =~ ^[0-9]+$ ]] && [[ "$col_count" -gt 0 ]]
@@ -130,6 +130,7 @@ define_columns() {
             --column="Type" \
             "int" "string" "boolean")
 
+        
         [[ $? -ne 0 ]] && return 1
 
         columns="$columns$col_name:"
@@ -220,16 +221,12 @@ insert_into_table() {
                 [[ $? -ne 0 ]] && return 0
             fi
 
-            if [[ "$type" == "int" ]] && ! [[ "$val" =~ ^[0-9]+$ ]]
-            then
-                zenity --error --text="$col must be an integer"
-                continue
+            if [[ "$type" == "int" ]]; then
+                validate_int_value "$val" || continue
             fi
 
-            if [[ "$type" == "string" ]] && [[ "$val" == *:* ]]
-            then
-                zenity --error --text="String cannot contain ':'"
-                continue
+            if [[ "$type" == "string" ]]; then
+                validate_string_value "$val" || continue
             fi
 
             if [[ "$col" == "$pk" ]]
@@ -505,14 +502,12 @@ update_table() {
                     [[ $? -ne 0 ]] && return 0
                 fi
 
-                if [[ "$type" == "int" ]] && ! [[ "$val" =~ ^[0-9]+$ ]]; then
-                    zenity --error --text="$col must be an integer"
-                    continue
+                if [[ "$type" == "int" ]]; then
+                    validate_int_value "$val" || continue
                 fi
 
-                if [[ "$type" == "string" ]] && [[ "$val" == *:* ]]; then
-                    zenity --error --text="String cannot contain ':'"
-                    continue
+                if [[ "$type" == "string" ]]; then
+                    validate_string_value "$val" || continue
                 fi
 
                 if [[ "$col" == "$pk" ]]; then
